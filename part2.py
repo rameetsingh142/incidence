@@ -253,69 +253,73 @@ def launch_gui():
             progress_bar.update()
             html_content = fetch_html(url)
 
-            if html_content:
-                page_text = parse_and_extract_text(html_content)
-                if not page_text.strip():
-                    continue
+            if not html_content or not html_content.strip():
+                # If cannot access or extract content, just print the URL and a message
+                output_widget.insert(tk.END, "  (Cannot access or extract data from this link)\n", "incidence_highlight")
+                output_widget.update()
+                time.sleep(0.5)
+                continue
 
-                # Limit sentences to first 4000 characters for more context
-                sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s', page_text[:4000])
+            page_text = parse_and_extract_text(html_content)
+            if not page_text.strip():
+                output_widget.insert(tk.END, "  (Cannot access or extract data from this link)\n", "incidence_highlight")
+                output_widget.update()
+                time.sleep(0.5)
+                continue
 
-                keywords = [
-                    "incidence", "prevalence", "mortality", "death", "deaths", "fatality",
-                    "population affected", "per year", "annual", "annually", "cases", "rate",
-                    "subjects tested", "sample size", "participants", "surveyed", "enrolled", "year",
-                    "population", "study population", "sample", "n="
+            # Limit sentences to first 4000 characters for more context
+            sentences = re.split(r'(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s', page_text[:4000])
+            keywords = [
+                "incidence", "prevalence", "mortality", "death", "deaths", "fatality",
+                "population affected", "per year", "annual", "annually", "cases", "rate",
+                "subjects tested", "sample size", "participants", "surveyed", "enrolled", "year",
+                "population", "study population", "sample", "n="
+            ]
+            relevant_sentences = []
+            for sentence in sentences:
+                s = sentence.strip()
+                if (
+                    medical_condition.lower() in s and
+                    "india" in s and
+                    any(kw in s for kw in keywords)
+                ):
+                    relevant_sentences.append(s)
+                elif (
+                    "india" in s and
+                    (
+                        re.search(r'\b\d{2,}[ ,]*\b(population|subjects|cases|patients|participants|sample|n=)', s)
+                        or re.search(r'\b\d{2,}[ ,]*\b(per year|annually|annual|each year)', s)
+                    )
+                ):
+                    relevant_sentences.append(s)
+
+            if len(relevant_sentences) < 2:
+                paper_patterns = [
+                    r'(?:journal|doi|pubmed|abstract|study|research|publication|volume|issue|authors|published)',
+                    r'(?:background|methods|results|conclusion|introduction)'
                 ]
-                relevant_sentences = []
                 for sentence in sentences:
                     s = sentence.strip()
-                    # Look for population/time/epidemiology context
                     if (
-                        medical_condition.lower() in s and
                         "india" in s and
-                        any(kw in s for kw in keywords)
-                    ):
-                        relevant_sentences.append(s)
-                    # Also allow sentences with population/time context even if not all keywords present
-                    elif (
-                        "india" in s and
-                        (
-                            re.search(r'\b\d{2,}[ ,]*\b(population|subjects|cases|patients|participants|sample|n=)', s)
-                            or re.search(r'\b\d{2,}[ ,]*\b(per year|annually|annual|each year)', s)
-                        )
+                        any(re.search(pat, s) for pat in paper_patterns)
                     ):
                         relevant_sentences.append(s)
 
-                # Try to scrape for research paper titles/abstracts if not enough relevant sentences found
-                if len(relevant_sentences) < 2:
-                    paper_patterns = [
-                        r'(?:journal|doi|pubmed|abstract|study|research|publication|volume|issue|authors|published)',
-                        r'(?:background|methods|results|conclusion|introduction)'
-                    ]
-                    for sentence in sentences:
-                        s = sentence.strip()
-                        if (
-                            "india" in s and
-                            any(re.search(pat, s) for pat in paper_patterns)
-                        ):
-                            relevant_sentences.append(s)
-
-                for s in relevant_sentences:
-                    # Highlight by type
-                    if "subjects tested" in s or "sample size" in s or "participants" in s or "surveyed" in s or "enrolled" in s or "study population" in s or "sample" in s or "n=" in s:
-                        output_widget.insert(tk.END, s + "\n", "incidence_highlight")
-                    elif "incidence" in s or "cases" in s or "per year" in s or "annual" in s or "annually" in s:
-                        output_widget.insert(tk.END, s + "\n", "incidence_highlight")
-                    elif "prevalence" in s:
-                        output_widget.insert(tk.END, s + "\n", "prevalence_highlight")
-                    elif "mortality" in s or "death" in s or "deaths" in s or "fatality" in s:
-                        output_widget.insert(tk.END, s + "\n", "incidence_highlight")
-                    elif "population affected" in s or "rate" in s or "population" in s:
-                        output_widget.insert(tk.END, s + "\n", "incidence_highlight")
-                    elif any(re.search(pat, s) for pat in paper_patterns):
-                        output_widget.insert(tk.END, s + "\n", "prevalence_highlight")
-                output_widget.update()
+            for s in relevant_sentences:
+                if "subjects tested" in s or "sample size" in s or "participants" in s or "surveyed" in s or "enrolled" in s or "study population" in s or "sample" in s or "n=" in s:
+                    output_widget.insert(tk.END, s + "\n", "incidence_highlight")
+                elif "incidence" in s or "cases" in s or "per year" in s or "annual" in s or "annually" in s:
+                    output_widget.insert(tk.END, s + "\n", "incidence_highlight")
+                elif "prevalence" in s:
+                    output_widget.insert(tk.END, s + "\n", "prevalence_highlight")
+                elif "mortality" in s or "death" in s or "deaths" in s or "fatality" in s:
+                    output_widget.insert(tk.END, s + "\n", "incidence_highlight")
+                elif "population affected" in s or "rate" in s or "population" in s:
+                    output_widget.insert(tk.END, s + "\n", "incidence_highlight")
+                elif any(re.search(pat, s) for pat in paper_patterns):
+                    output_widget.insert(tk.END, s + "\n", "prevalence_highlight")
+            output_widget.update()
             time.sleep(0.5)
 
         progress_bar["value"] = 0
